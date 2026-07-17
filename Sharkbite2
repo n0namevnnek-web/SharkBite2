@@ -39,7 +39,7 @@ end
 -------------------------------------------------------------------------------
 -- 👇 YOUR MAIN SCRIPT CODE STARTS HERE 👇
 -------------------------------------------------------------------------------
--- NNVN HUB - Sharkbite 2 Edition (SLOW FLY)
+-- NNVN HUB - Sharkbite 2 Edition (FULL FEATURES)
 -- By N0NAMEVN
 repeat task.wait() until game:IsLoaded()
 
@@ -64,7 +64,12 @@ local Window = Rayfield:CreateWindow({
     KeySystem = false
 })
 
-local Tab = Window:CreateTab("🦈 Main", 4483362458)
+-- ============================================
+-- TABS
+-- ============================================
+local MainTab = Window:CreateTab("🦈 Main", 4483362458)
+local VisualTab = Window:CreateTab("👁️ Visual", 4483362458)
+local InfoTab = Window:CreateTab("📋 Info", 4483362458)
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -72,7 +77,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 local Camera = workspace.CurrentCamera
 local Workspace = game:GetService("Workspace")
-local TweenService = game:GetService("TweenService")
+local Lighting = game:GetService("Lighting")
 
 local player = Players.LocalPlayer
 local backpack = player:WaitForChild("Backpack")
@@ -82,8 +87,7 @@ local hrp = nil
 local remote = nil
 local sharkName = nil
 local killConnection = nil
-local isFarming = false
-local currentTarget = nil
+local isKilling = false
 
 local validWeapons = ReplicatedStorage:WaitForChild("ClientViewportObjects"):WaitForChild("Weapons")
 
@@ -92,6 +96,20 @@ local remotesFolder = ReplicatedStorage
     :WaitForChild("Events")
     :WaitForChild("Weapons")
     :WaitForChild("remotes")
+
+-- ============================================
+-- SAVE ORIGINAL LIGHTING
+-- ============================================
+local OriginalLighting = {
+    Brightness = Lighting.Brightness,
+    OutdoorAmbient = Lighting.OutdoorAmbient,
+    Ambient = Lighting.Ambient,
+    GlobalShadows = Lighting.GlobalShadows,
+    FogEnd = Lighting.FogEnd,
+    FogStart = Lighting.FogStart,
+    ClockTime = Lighting.ClockTime,
+    GeographicLatitude = Lighting.GeographicLatitude,
+}
 
 -- ============================================
 -- HOOK REMOTE
@@ -172,7 +190,7 @@ sharksFolder.ChildAdded:Connect(getShark)
 sharksFolder.ChildRemoved:Connect(getShark)
 
 -- ============================================
--- GET SHARK CENTER
+-- GET SHARK CENTER (FIXED)
 -- ============================================
 local currentSide = 1
 local sideResults = {{}, {}, {}, {}}
@@ -211,7 +229,7 @@ local function getSharkCenter(shark)
 end
 
 -- ============================================
--- KILL SHARK
+-- KILL SHARK (FIXED)
 -- ============================================
 local function killShark()
     if sharkName and remote then
@@ -230,46 +248,83 @@ local function killShark()
 end
 
 -- ============================================
--- SLOW TELEPORT (BAY CHẬM)
+-- VISUAL FUNCTIONS
 -- ============================================
-local function slowTeleport(targetPos)
-    if not hrp then return end
-    
-    local currentPos = hrp.Position
-    local distance = (currentPos - targetPos).Magnitude
-    
-    -- Nếu khoảng cách quá xa -> teleport thẳng (tránh bị lag)
-    if distance > 200 then
-        hrp.CFrame = CFrame.new(targetPos)
-        return
+
+-- Full Bright
+local function setFullBright(enabled)
+    if enabled then
+        Lighting.Brightness = 2
+        Lighting.OutdoorAmbient = Color3.new(1, 1, 1)
+        Lighting.Ambient = Color3.new(1, 1, 1)
+        Lighting.GlobalShadows = false
+    else
+        Lighting.Brightness = OriginalLighting.Brightness
+        Lighting.OutdoorAmbient = OriginalLighting.OutdoorAmbient
+        Lighting.Ambient = OriginalLighting.Ambient
+        Lighting.GlobalShadows = OriginalLighting.GlobalShadows
     end
-    
-    -- Tạo tween để di chuyển chậm
-    local tweenInfo = TweenInfo.new(
-        0.3, -- Thời gian di chuyển (chậm hơn)
-        Enum.EasingStyle.Linear,
-        Enum.EasingDirection.Out
-    )
-    
-    local tween = TweenService:Create(hrp, tweenInfo, {
-        CFrame = CFrame.new(targetPos)
-    })
-    
-    tween:Play()
-    tween.Completed:Wait()
+end
+
+-- Super Bright
+local function setSuperBright(enabled)
+    if enabled then
+        Lighting.Brightness = 15
+        Lighting.OutdoorAmbient = Color3.new(1, 1, 1)
+        Lighting.Ambient = Color3.new(1, 1, 1)
+        Lighting.GlobalShadows = false
+    else
+        setFullBright(false)
+    end
+end
+
+-- No Fog
+local function setNoFog(enabled)
+    if enabled then
+        Lighting.FogEnd = 1000000
+        Lighting.FogStart = 999999
+    else
+        Lighting.FogEnd = OriginalLighting.FogEnd
+        Lighting.FogStart = OriginalLighting.FogStart
+    end
+end
+
+-- Day Time
+local function setDayTime(enabled)
+    if enabled then
+        Lighting.ClockTime = 14
+        Lighting.GeographicLatitude = 45
+    else
+        Lighting.ClockTime = OriginalLighting.ClockTime
+        Lighting.GeographicLatitude = OriginalLighting.GeographicLatitude
+    end
+end
+
+-- See Through Water
+local function setSeeWater(enabled)
+    local water = Workspace:FindFirstChild("Water")
+    if water then
+        for _, part in pairs(water:GetChildren()) do
+            if part:IsA("BasePart") then
+                part.Transparency = enabled and 0.8 or 0.5
+                part.Reflectance = enabled and 0 or 0.2
+            end
+        end
+    end
 end
 
 -- ============================================
--- TAB: AUTO FARM (BAY CHẬM)
+-- TAB: MAIN 🦈
 -- ============================================
-Tab:CreateSection("Autofarm")
+
+MainTab:CreateSection("Autofarm")
 
 local lastClickTime = 0
-local clickCooldown = 0.3
-local isTeleporting = false
+local clickCooldown = 0.5
+local isFarming = false
 
-Tab:CreateToggle({
-    Name = "Auto Kill Shark (Slow Fly)",
+MainTab:CreateToggle({
+    Name = "Auto Kill Shark",
     CurrentValue = false,
     Flag = "AutoKillShark",
     Callback = function(on)
@@ -296,26 +351,23 @@ Tab:CreateToggle({
                 if not isFarming then return end
                 if not (player.Team and player.Team.Name == "Survivor" and hrp and character) then return end
 
-                -- Nếu không có shark -> teleport lên Chinook
                 if not sharkName then
                     Camera.CameraType = Enum.CameraType.Custom
                     local chinook = workspace:FindFirstChild("Chinook")
                     local interior = chinook and chinook:FindFirstChild("interior")
                     if interior and hrp then
                         unseat()
-                        slowTeleport(interior.Position)
+                        hrp.CFrame = interior.CFrame
                     end
                     return
                 end
 
-                -- Có shark -> auto kill (bay chậm đến shark)
                 local shark = sharksFolder:FindFirstChild(sharkName)
                 if not shark then return end
 
                 local sharkPart = shark.PrimaryPart or shark:FindFirstChildWhichIsA("BasePart", true)
                 if not sharkPart then return end
 
-                -- Trang bị vũ khí
                 if next(backpack:GetChildren()) then
                     for _, tool in ipairs(backpack:GetChildren()) do
                         if tool:IsA("Tool") and validWeapons:FindFirstChild(tool.Name) 
@@ -327,13 +379,14 @@ Tab:CreateToggle({
                     end
                 end
 
-                -- Nếu chưa có remote -> bay chậm đến shark để lấy remote
                 if not remote then
                     local boundingCF, boundingSize = shark:GetBoundingBox()
                     local center = boundingCF.Position - Vector3.new(0, boundingSize.Y * 0.125, 0)
 
                     unseat()
-                    slowTeleport(center)
+                    if hrp then
+                        hrp.CFrame = CFrame.new(center)
+                    end
 
                     Camera.CameraType = Enum.CameraType.Scriptable
                     Camera.CFrame = CFrame.new(center, sharkPart.Position)
@@ -353,12 +406,11 @@ Tab:CreateToggle({
                         end
                     end
                 else
-                    -- Đã có remote -> bay chậm đến shark và kill
                     local sharkCenter = getSharkCenter(shark)
                     if sharkCenter and hrp then
                         Camera.CameraType = Enum.CameraType.Custom
                         unseat()
-                        slowTeleport(sharkCenter)
+                        hrp.CFrame = CFrame.new(sharkCenter)
                         killShark()
                     end
                 end
@@ -465,7 +517,7 @@ local function getNearestSurvivor(part)
     return nearestPlayer
 end
 
-Tab:CreateToggle({
+MainTab:CreateToggle({
     Name = "Auto Win As Shark",
     CurrentValue = false,
     Flag = "AutoWinShark",
@@ -520,7 +572,7 @@ Tab:CreateToggle({
 -- ============================================
 -- SHARK ESP
 -- ============================================
-Tab:CreateSection("Shark ESP")
+MainTab:CreateSection("Shark ESP")
 
 local espConnections = {}
 local espWatching = false
@@ -564,7 +616,7 @@ local function setSharkESP(enabled)
     end
 end
 
-Tab:CreateToggle({
+MainTab:CreateToggle({
     Name = "Highlight Sharks [ESP]",
     CurrentValue = false,
     Flag = "SharkESP",
@@ -576,7 +628,7 @@ Tab:CreateToggle({
 -- ============================================
 -- PLAYER ESP
 -- ============================================
-Tab:CreateSection("Player ESP")
+MainTab:CreateSection("Player ESP")
 
 local playerEspConnections = {}
 local playerEspWatching = false
@@ -666,7 +718,7 @@ local function setPlayerESP(enabled)
     end
 end
 
-Tab:CreateToggle({
+MainTab:CreateToggle({
     Name = "Highlight Players [ESP]",
     CurrentValue = false,
     Flag = "PlayerESP",
@@ -678,7 +730,7 @@ Tab:CreateToggle({
 -- ============================================
 -- AUTO VASE
 -- ============================================
-Tab:CreateSection("Auto Vase")
+MainTab:CreateSection("Auto Vase")
 
 local vaseParts = {}
 local vaseConnections = {}
@@ -697,7 +749,7 @@ local function addVasePart(part)
     end)
 end
 
-Tab:CreateToggle({
+MainTab:CreateToggle({
     Name = "Auto Touch Vases",
     CurrentValue = false,
     Flag = "AutoTouchVases",
@@ -744,16 +796,190 @@ Tab:CreateToggle({
 })
 
 -- ============================================
+-- TAB: VISUAL 👁️
+-- ============================================
+
+VisualTab:CreateSection("Lighting")
+
+VisualTab:CreateToggle({
+    Name = "Full Brightness",
+    CurrentValue = false,
+    Flag = "Vis_FullBright",
+    Callback = function(Value)
+        setFullBright(Value)
+    end,
+})
+
+VisualTab:CreateToggle({
+    Name = "Super Brightness",
+    CurrentValue = false,
+    Flag = "Vis_SuperBright",
+    Callback = function(Value)
+        setSuperBright(Value)
+    end,
+})
+
+VisualTab:CreateToggle({
+    Name = "No Fog",
+    CurrentValue = false,
+    Flag = "Vis_NoFog",
+    Callback = function(Value)
+        setNoFog(Value)
+    end,
+})
+
+VisualTab:CreateToggle({
+    Name = "Day Time",
+    CurrentValue = false,
+    Flag = "Vis_DayTime",
+    Callback = function(Value)
+        setDayTime(Value)
+    end,
+})
+
+VisualTab:CreateDivider()
+
+VisualTab:CreateSection("Water")
+
+VisualTab:CreateToggle({
+    Name = "See Through Water",
+    CurrentValue = false,
+    Flag = "Vis_SeeWater",
+    Callback = function(Value)
+        setSeeWater(Value)
+    end,
+})
+
+VisualTab:CreateDivider()
+
+VisualTab:CreateSection("FPS Boost")
+
+VisualTab:CreateToggle({
+    Name = "FPS Boost Mode",
+    CurrentValue = false,
+    Flag = "Vis_FPSBoost",
+    Callback = function(Value)
+        if Value then
+            for _, v in pairs(Workspace:GetDescendants()) do
+                if v:IsA("BasePart") then
+                    v.Material = Enum.Material.SmoothPlastic
+                    v.Reflectance = 0
+                elseif v:IsA("Decal") then
+                    v.Transparency = 1
+                end
+            end
+            settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
+        else
+            settings().Rendering.QualityLevel = Enum.QualityLevel.Level09
+        end
+    end,
+})
+
+VisualTab:CreateDivider()
+
+VisualTab:CreateSection("Reset")
+
+VisualTab:CreateButton({
+    Name = "Reset All Visuals",
+    Callback = function()
+        setFullBright(false)
+        setSuperBright(false)
+        setNoFog(false)
+        setDayTime(false)
+        setSeeWater(false)
+        
+        -- Reset flags
+        Rayfield.Flags["Vis_FullBright"]:Set(false)
+        Rayfield.Flags["Vis_SuperBright"]:Set(false)
+        Rayfield.Flags["Vis_NoFog"]:Set(false)
+        Rayfield.Flags["Vis_DayTime"]:Set(false)
+        Rayfield.Flags["Vis_SeeWater"]:Set(false)
+        
+        Rayfield:Notify({
+            Title = "NNVN HUB",
+            Content = "✅ All visuals reset!",
+            Duration = 2,
+        })
+    end,
+})
+
+-- ============================================
+-- TAB: INFO 📋
+-- ============================================
+
+InfoTab:CreateSection("About")
+
+InfoTab:CreateParagraph({
+    Title = "NNVN HUB",
+    Content = "━━━━━━━━━━━━━━━━━━\n" ..
+              "🌟 Version: 3.0\n" ..
+              "👤 Creator: N0NAMEVN\n" ..
+              "🎮 Game: Sharkbite 2\n" ..
+              "📅 Updated: 2026\n" ..
+              "━━━━━━━━━━━━━━━━━━\n\n" ..
+              "📌 Features:\n" ..
+              "• Auto Kill Shark\n" ..
+              "• Auto Win As Shark\n" ..
+              "• Auto Touch Vases\n" ..
+              "• Shark & Player ESP\n" ..
+              "• Full Bright / Super Bright\n" ..
+              "• No Fog / Day Time\n" ..
+              "• See Through Water\n" ..
+              "• FPS Boost\n" ..
+              "• Anti-AFK\n" ..
+              "━━━━━━━━━━━━━━━━━━"
+})
+
+InfoTab:CreateDivider()
+
+InfoTab:CreateSection("Keybinds")
+
+InfoTab:CreateParagraph({
+    Title = "Controls",
+    Content = "🔄 K - Toggle Menu\n" ..
+              "━━━━━━━━━━━━━━━━━━\n" ..
+              "💡 Tất cả tính năng đều\n" ..
+              "có thể bật/tắt trong GUI"
+})
+
+InfoTab:CreateDivider()
+
+InfoTab:CreateSection("Credits")
+
+InfoTab:CreateParagraph({
+    Title = "Credits",
+    Content = "👑 Lead Developer: N0NAMEVN\n" ..
+              "━━━━━━━━━━━━━━━━━━\n" ..
+              "💬 Discord: Coming Soon\n" ..
+              "🐛 Report bugs: Via Discord\n" ..
+              "━━━━━━━━━━━━━━━━━━\n" ..
+              "❤️ Thanks for using NNNV HUB!"
+})
+
+InfoTab:CreateDivider()
+
+InfoTab:CreateButton({
+    Name = "Destroy GUI",
+    Callback = function()
+        Window:Destroy()
+        Rayfield:Notify({
+            Title = "NNVN HUB",
+            Content = "GUI Destroyed!",
+            Duration = 2,
+        })
+    end,
+})
+
+-- ============================================
 -- STARTUP NOTIFICATION
 -- ============================================
 Rayfield:Notify({
     Title = "NNVN HUB",
-    Content = "✅ Sharkbite 2 Loaded! (Slow Fly)",
+    Content = "✅ Sharkbite 2 Loaded! (Full Features)",
     Duration = 3,
 })
 
 print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 print("   NNVN HUB - Sharkbite 2")
-print("   Version 2.1 - Slow Fly Mode!")
+print("   Version 3.0 - Full Features!")
 print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-print(ProtectionConfig.HubName .. " Loaded Successfully!")
